@@ -100,7 +100,7 @@ def parse_cfg():
 
     args = parser.parse_args()
     config_dict = vars(args)
-    # Config dict to object
+    # Config dict to object 
     config = dict2obj(config_dict)
     
     return config, config_dict
@@ -143,6 +143,7 @@ def run_one_epoch(data_loader, batch_size, model, map_env, device, out_path, los
     for i, data in enumerate(pbar_data):
         start_t = time.time()
         sample_pred = None
+
         scene_graph, map_idx = data
         if empty_cache:
             empty_cache = False
@@ -172,7 +173,6 @@ def run_one_epoch(data_loader, batch_size, model, map_env, device, out_path, los
                                                                                 check_non_drivable_separation=feasibility_check_sep,
                                                                                 map_env=map_env,
                                                                                 map_idx=map_idx)
-
             if planner_name == 'ego':
                 # make sure the ego "planner" has max velocity above some thresh for
                 # it to be considered an interesting scenario
@@ -593,7 +593,6 @@ def main():
                                     num_workers=cfg.num_workers,
                                     pin_memory=False,
                                     worker_init_fn=lambda _: np.random.seed()) # get around numpy RNG seed bug
-
     # create model
     model = TrafficModel(cfg.past_len, cfg.future_len, cfg.map_obs_size_pix, len(test_dataset.categories),
                         map_feat_size=cfg.map_feat_size,

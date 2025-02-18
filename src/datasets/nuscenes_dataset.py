@@ -297,6 +297,9 @@ class NuScenesDataset(Dataset):
             'v1.0-mini': {True: 'mini_train', False: 'mini_val'},
         }[self.nusc.version][self.split == 'train' or self.split == 'val']
         scenes = create_splits_scenes()[cur_split]       
+        # debug
+        # scenes[0] = 'scene-0103'
+        scenes[0] = 'scene-0061'
 
         # use scenes based on the prediction challenge, so val is actually part of the
         #   training set and we use the true val split for testing
@@ -466,6 +469,7 @@ class NuScenesDataset(Dataset):
                     'lw' :  ego_lw,
                     'is_vis' : np.concatenate([np.zeros((nadd_steps), dtype=np.int), ego_is_vis], axis=0),
                     'k' : 'ego',
+                    't': ego_t_map
                 }
             else:
                 ego_info = {
@@ -474,6 +478,7 @@ class NuScenesDataset(Dataset):
                     'lw' :  ego_lw,
                     'is_vis' : ego_is_vis,
                     'k' : 'ego',
+                    't': ego_t_map
                 }
             scene2info[scene]['ego'] = ego_info
 
@@ -614,6 +619,8 @@ class NuScenesDataset(Dataset):
         lw = [ego_data['lw']]
         past_vis = [ego_data['is_vis'][sidx:midx]]
         fut_vis = [ego_data['is_vis'][midx:eidx]]
+        agent_names = ['ego']
+        ego_time_info = ego_data['t']
 
         if self.use_challenge_splits:
             # prepend data for the agent we're making a prediction for
@@ -647,6 +654,8 @@ class NuScenesDataset(Dataset):
             lw.append(agent_data['lw'])
             past_vis.append(agent_data['is_vis'][sidx:midx])
             fut_vis.append(agent_data['is_vis'][midx:eidx])
+            agent_names.append(agent)
+
 
         past = torch.Tensor(np.stack(past, axis=0))
         future = torch.Tensor(np.stack(future, axis=0))
@@ -654,6 +663,7 @@ class NuScenesDataset(Dataset):
         lw = torch.Tensor(np.stack(lw, axis=0))
         past_vis = torch.Tensor(np.stack(past_vis, axis=0))
         fut_vis = torch.Tensor(np.stack(fut_vis, axis=0))
+        # agent_names = torch.Tensor(agent_names)
 
         # normalize
         past_gt = self.normalizer.normalize(past) # gt past (no noise)
@@ -698,6 +708,9 @@ class NuScenesDataset(Dataset):
             'lw' : lw,
             'past_vis' : past_vis,
             'future_vis' : fut_vis,
+            'agent_name': agent_names,
+            'time_info': ego_time_info,
+            'time_duration': [[sidx, midx, eidx]]
         }
         scene_graph = Graph(**graph_prop_dict)
 

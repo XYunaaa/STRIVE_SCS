@@ -81,7 +81,8 @@ def run_adv_gen_optim(cur_z, lr, loss_weights, model, scene_graph, map_env, map_
                             scene_graph.ptr,
                             veh_coll_buffer=veh_coll_buffer,
                             crash_loss_min_time=feasibility_time,
-                            crash_loss_min_infront=feasibility_infront_min)
+                            crash_loss_min_infront=feasibility_infront_min,
+                            scene_graph= scene_graph)
 
     if planner_name != 'ego':
         # for real planners need to set initial state for rollouts
@@ -194,6 +195,8 @@ def run_adv_gen_optim(cur_z, lr, loss_weights, model, scene_graph, map_env, map_
 
     # compute loss one more time to get final min agt/t
     tgt_traj = final_result_traj[ego_inds, torch.zeros_like(ego_inds)] # the true planner rollout
+    import pdb; pdb.set_trace()
+
     adv_loss_dict = adv_loss(model.get_normalizer().unnormalize(final_decoder_out['future_pred']),
                                 model.get_normalizer().unnormalize(tgt_traj),
                                 cur_z[~ego_mask].clone().detach(),

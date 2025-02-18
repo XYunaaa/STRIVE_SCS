@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: MIT
 
 import torch
+import time
 from torch import nn
 
 import numpy as np
-
+from pathlib import Path
 from losses.common import log_normal
 from utils.transforms import transform2frame
 import datasets.nuscenes_utils as nutils
@@ -57,7 +58,8 @@ class AdvGenLoss(nn.Module):
     def __init__(self, loss_weights, veh_att, mapixes, map_env, init_z, ptr,
                     veh_coll_buffer=0.0,
                     crash_loss_min_time=0,
-                    crash_loss_min_infront=None
+                    crash_loss_min_infront=None,
+                    scene_graph=None
                     ):
         '''
         :param loss_weights: dict of weightings for loss terms
@@ -89,6 +91,7 @@ class AdvGenLoss(nn.Module):
         if self.crash_min_infront is not None:
             assert(self.crash_min_infront >= -1)
             assert(self.crash_min_infront <= 1)       
+        self.scene_graph = scene_graph
 
     def forward(self, future_pred, tgt_traj, z, prior_out,
                     return_mins=False,
@@ -102,10 +105,38 @@ class AdvGenLoss(nn.Module):
         :param attack_agt_idx: list of indices within each scene graph to use as the attacker. These should be global
                                     to the entire batched scene graph.
         '''
+        fake_traj = tgt_traj[0, : , :2].detach().cpu().numpy()
+        np.save('ego_pose.npy', fake_traj)
+        np.save('adv_agent_trajs.npy', future_pred[:, :, 0:2].detach().cpu().numpy())
+        np.save('agent_name.npy',  self.scene_graph.agent_name)
+        np.save('time_info.npy', self.scene_graph.time_info)
+        np.save('time_duration.npy', self.scene_graph.time_duration[0][0])
+        print(self.scene_graph.agent_name)
+        with open("processing_complete.flag", "w") as f:
+            f.write("READY")
+        
+        adv_agents_path = Path('adv_agents.npy')
+        gt_agents_path = Path('gt_agents.npy')
+        while True:       
+            if adv_agents_path.exists() and gt_agents_path.exists():
+                print('Scene feature is ready!')
+                break
+        
+        time.sleep(2) # preventing the file from not being written
         NA = future_pred.size(0)
         B = tgt_traj.size(0)
         adv_crash_loss = min_dist = dist_traj = None
         cur_min_agt = cur_min_t = None
+
+        # appearance loss
+        adv_agents_fea = torch.tensor(np.load(adv_agents_path), dtype=torch.float32, requires_grad=True).to('cuda:0')
+        gt_agents_fea = torch.tensor(np.load(gt_agents_path), dtype=torch.float32, requires_grad=True).to('cuda:0')
+        appearance_loss = torch.sum((adv_agents_fea - gt_agents_fea) ** 2, dim=-1)
+        appearance_loss = 0.01 * appearance_loss.mean()
+        adv_agents_path.unlink()
+        gt_agents_path.unlink()
+
+
         if 'adv_crash' in self.loss_weights and self.loss_weights['adv_crash'] > 0.0:
             # minimize POSITIONAL distance
             attacker_pred = future_pred[~self.ego_mask][:, self.crash_min_t:, :] # (NA-B, T, 4)
@@ -249,6 +280,10 @@ class AdvGenLoss(nn.Module):
         if adv_crash_loss is not None:
             loss = loss + self.loss_weights['adv_crash']*adv_crash_loss.mean()
             loss_out['adv_crash_loss'] = adv_crash_loss
+        
+        if appearance_loss is not None:
+            loss = loss + appearance_loss
+            loss_out['appearance_loss'] = appearance_loss
 
         loss_out['loss'] = loss         
 
